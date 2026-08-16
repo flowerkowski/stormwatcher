@@ -50,7 +50,7 @@ export default function SettingsPanel({ open, onOpenChange, settings, onChange }
           </SheetDescription>
         </SheetHeader>
 
-        <div className="mt-8 space-y-7">
+        <div className="mt-8 space-y-7 px-4 pb-6">
           {/* thresholds */}
           <div className="space-y-5">
             <div>
