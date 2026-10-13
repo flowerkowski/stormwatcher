@@ -109,9 +109,9 @@ export default function SettingsPanel({ open, onOpenChange, settings, onChange }
             <div className="flex items-center justify-between">
               <div>
                 <Label className="text-slate-200" htmlFor="storm-alerts">
-                  Storm warnings
+                  Storm forecast alerts
                 </Label>
-                <p className="text-xs text-slate-500">Thunderstorm &amp; hail detection</p>
+                <p className="text-xs text-slate-500">Forecast thunderstorms &amp; hail</p>
               </div>
               <Switch
                 id="storm-alerts"

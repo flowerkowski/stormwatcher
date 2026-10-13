@@ -14,6 +14,7 @@ export default function LocationSearch({ onSelect, compact = false }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<GeoPlace[]>([])
   const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
@@ -31,6 +32,9 @@ export default function LocationSearch({ onSelect, compact = false }: Props) {
 
   useEffect(() => {
     const controller = new AbortController()
+    setSearching(false)
+    setOpen(false)
+    setActiveIndex(-1)
     if (query.trim().length < 2) {
       setResults([])
       setOpen(false)
@@ -42,10 +46,11 @@ export default function LocationSearch({ onSelect, compact = false }: Props) {
       setSearchError(null)
       try {
         const places = await searchPlaces(query.trim(), controller.signal)
+        if (controller.signal.aborted) return
         setResults(places)
         setOpen(true)
       } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return
+        if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
         setResults([])
         setSearchError('City search is unavailable right now. Please try again.')
       } finally {
@@ -121,12 +126,24 @@ export default function LocationSearch({ onSelect, compact = false }: Props) {
             onFocus={() => results.length > 0 && setOpen(true)}
             onKeyDown={(event) => {
               if (event.key === 'Escape') setOpen(false)
+              if (results.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+                event.preventDefault()
+                setOpen(true)
+                setActiveIndex((index) => event.key === 'ArrowDown'
+                  ? (index + 1) % results.length
+                  : (index <= 0 ? results.length - 1 : index - 1))
+              }
+              if (event.key === 'Enter' && open && activeIndex >= 0 && results[activeIndex]) {
+                event.preventDefault()
+                pick(results[activeIndex])
+              }
             }}
             role="combobox"
             aria-label="Search for a city"
             aria-autocomplete="list"
             aria-controls={listId}
             aria-expanded={open && results.length > 0}
+            aria-activedescendant={open && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
             autoComplete="off"
             placeholder="Search your city…"
             className="border-white/15 bg-white/[0.06] pl-9 text-white placeholder:text-slate-500 focus-visible:ring-sky-400/50"
@@ -141,14 +158,17 @@ export default function LocationSearch({ onSelect, compact = false }: Props) {
               aria-label="Matching locations"
               className="absolute z-50 mt-2 w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/95 shadow-2xl backdrop-blur-xl"
             >
-              {results.map((p) => (
+              {results.map((p, index) => (
                 <button
                   key={p.id}
                   type="button"
                   role="option"
-                  aria-selected="false"
+                  id={`${listId}-${index}`}
+                  tabIndex={-1}
+                  aria-selected={activeIndex === index}
+                  onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => pick(p)}
-                  className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+                  className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 ${activeIndex === index ? 'bg-white/10' : ''}`}
                 >
                   <MapPin className="h-3.5 w-3.5 shrink-0 text-sky-400" />
                   <span className="truncate">
@@ -167,6 +187,7 @@ export default function LocationSearch({ onSelect, compact = false }: Props) {
           type="button"
           onClick={useGps}
           disabled={locating}
+          aria-label={locating ? 'Determining your location' : 'Use GPS location'}
           variant="outline"
           className="shrink-0 border-sky-400/40 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20 hover:text-sky-100"
         >

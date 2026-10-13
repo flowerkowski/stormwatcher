@@ -33,6 +33,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Test forecast logic and backend
+        run: npm run test && npm run test:backend
+
       - name: Build
         run: npm run build
 

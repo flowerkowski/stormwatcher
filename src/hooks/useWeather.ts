@@ -15,8 +15,8 @@ function eventMessage(e: AlertEvent): { title: string; body: string } {
   const dur = e.hours > 1 ? `, ~${e.hours} h` : ''
   if (e.level === 'storm') {
     return {
-      title: '⛈ Storm warning',
-      body: `Thunderstorm ${eta}${dur}. Peak probability ${e.peakProb}%${e.maxGusts >= 50 ? `, gusts up to ${Math.round(e.maxGusts)} km/h` : ''}.`,
+      title: '⛈ Thunderstorm forecast',
+      body: `Thunderstorm ${eta}${dur}. Peak precipitation probability ${e.peakProb}%${e.maxGusts >= 50 ? `, gusts up to ${Math.round(e.maxGusts)} km/h` : ''}.`,
     }
   }
   if (e.level === 'heavy') {
@@ -66,7 +66,7 @@ export function useWeather(location: SavedLocation | null, settings: AlertSettin
       const bundle = await fetchWeather(
         location,
         { ...settingsRef.current, rainThreshold, heavyMmPerHour },
-        controller.signal,
+        AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]),
       )
       if (controller.signal.aborted) return
       setData(bundle)

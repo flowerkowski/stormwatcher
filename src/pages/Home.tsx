@@ -25,6 +25,7 @@ import PrecipChart from '@/components/PrecipChart'
 import AlertsPanel from '@/components/AlertsPanel'
 import DailyStrip from '@/components/DailyStrip'
 import LocationSearch from '@/components/LocationSearch'
+import WeatherNextPanel from '@/components/WeatherNextPanel'
 
 const SettingsPanel = lazy(() => import('@/components/SettingsPanel'))
 
@@ -49,10 +50,7 @@ export default function Home() {
     )
   }, [data, settings.stormAlerts, settings.rainAlerts])
 
-  const heroData = useMemo(() => {
-    if (!data) return null
-    return { ...data, events: visibleEvents }
-  }, [data, visibleEvents])
+  const heroData = data
 
   const pickLocation = (loc: SavedLocation) => {
     setLocation(loc)
@@ -60,7 +58,7 @@ export default function Home() {
     setEditingLocation(false)
   }
 
-  const effectiveStatus = data ? overallStatus(visibleEvents) : 'clear'
+  const effectiveStatus = data ? overallStatus(data.events) : 'clear'
 
   return (
     <div className="min-h-screen font-sans text-white">
@@ -137,8 +135,8 @@ export default function Home() {
                   Where should we watch the sky?
                 </h2>
                 <p className="mt-2 mb-6 max-w-sm text-sm leading-relaxed text-slate-400">
-                  Pick your location and StormWatch will warn you the moment rain or a
-                  thunderstorm starts heading your way.
+                  Pick your location to monitor rain and thunderstorm forecasts.
+                  Keep this tab open to receive forecast alerts.
                 </p>
               </>
             )}
@@ -166,7 +164,7 @@ export default function Home() {
                 className="flex flex-wrap items-center gap-2.5 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
               >
                 <TriangleAlert className="h-4 w-4 shrink-0" />
-                <span className="flex-1">{error} — check your connection and try again.</span>
+                <span className="flex-1">{error} — check your connection and try again. {data && 'Showing the last successful forecast; it may be out of date.'}</span>
                 <button
                   type="button"
                   onClick={() => void refresh()}
@@ -191,7 +189,7 @@ export default function Home() {
               <>
                 <StatusHero data={heroData} status={effectiveStatus} />
                 <div className="grid gap-4 lg:grid-cols-3">
-                  <div className="lg:col-span-2">
+                  <div className="min-w-0 lg:col-span-2">
                     <PrecipChart
                       hours={heroData.hours}
                       settings={settings}
@@ -201,6 +199,7 @@ export default function Home() {
                   <AlertsPanel events={visibleEvents} timeZone={heroData.timeZone} />
                 </div>
                 <DailyStrip daily={heroData.daily} timeZone={heroData.timeZone} />
+                <WeatherNextPanel key={`${location.latitude},${location.longitude}`} data={heroData} />
                 <p className="pt-2 text-center text-[11px] leading-relaxed text-slate-500">
                   Monitoring every {settings.refreshMinutes} min · last updated{' '}
                   {heroData.fetchedAt.toLocaleTimeString([], {
@@ -208,6 +207,9 @@ export default function Home() {
                     minute: '2-digit',
                   })}
                   {' · '}keep this tab open to receive alerts
+                </p>
+                <p className="text-center text-[11px] text-slate-500">
+                  Forecast alerts are informational. Follow your local weather authority for official warnings.
                 </p>
                 <p className="text-center text-[11px] text-slate-500">
                   <a

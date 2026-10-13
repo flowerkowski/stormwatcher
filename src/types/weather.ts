@@ -36,7 +36,9 @@ export interface DailyForecast {
 export type AlertLevel = 'storm' | 'heavy' | 'rain'
 
 export interface HourPoint {
+  /** Start of the displayed hour; precipitation is accumulated until precipitationTime. */
   time: Date
+  precipitationTime: Date
   temp: number
   precipProb: number
   precipMm: number

@@ -40,7 +40,7 @@ function headline(
 ): { title: string; sub: string } {
   if (status === 'storm' && next) {
     return next.ongoing
-      ? { title: 'Thunderstorm overhead', sub: 'Storm conditions right now — stay indoors and away from windows.' }
+      ? { title: 'Thunderstorms forecast now', sub: 'Check local observations and official weather warnings.' }
       : {
           title: 'Storm approaching',
           sub: `Thunderstorm expected ${formatEta(next.startsInMin)} (around ${formatHour(next.start, timeZone)}).`,
@@ -49,8 +49,8 @@ function headline(
   if (status === 'rain' && next) {
     return next.ongoing
       ? {
-          title: 'Raining now',
-          sub: `Wet conditions ongoing — expected to ease around ${formatHour(next.end, timeZone)}.`,
+          title: 'Rain forecast now',
+          sub: `Wet conditions forecast — expected to ease around ${formatHour(next.end, timeZone)}.`,
         }
       : {
           title: 'Rain on the way',
@@ -58,8 +58,8 @@ function headline(
         }
   }
   return {
-    title: 'All clear',
-    sub: 'No rain or storms expected in the next 48 hours.',
+    title: 'No forecast alerts',
+    sub: 'No rain or storms meet your alert thresholds in the next 48 hours.',
   }
 }
 
@@ -82,19 +82,19 @@ export default function StatusHero({ data, status }: { data: WeatherBundle; stat
       aria-live="polite"
       className={`app-enter relative overflow-hidden rounded-3xl border bg-white/[0.04] backdrop-blur-xl ${style.ring} ${style.glow}`}
     >
-      <div className="flex flex-col gap-8 p-8 md:flex-row md:items-center md:justify-between md:p-10">
-        <div className="flex items-start gap-5">
+      <div className="flex flex-col gap-8 p-5 sm:p-8 md:flex-row md:items-center md:justify-between md:p-10">
+        <div className="flex min-w-0 items-start gap-3 sm:gap-5">
           <div
             key={status}
-            className={`app-pop flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl md:h-20 md:w-20 ${style.iconBg}`}
+            className={`app-pop flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl sm:h-16 sm:w-16 md:h-20 md:w-20 ${style.iconBg}`}
           >
-            <Icon className="h-9 w-9 md:h-11 md:w-11" strokeWidth={1.6} />
+            <Icon className="h-7 w-7 sm:h-9 sm:w-9 md:h-11 md:w-11" strokeWidth={1.6} />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className={`text-xs font-semibold tracking-[0.25em] uppercase ${style.accent}`}>
-              {info.label} · live status
+              {info.label} · forecast status
             </p>
-            <h1 className="mt-1 text-4xl font-bold tracking-tight text-white md:text-5xl">
+            <h1 className="mt-1 break-words text-2xl font-bold tracking-tight text-white sm:text-4xl md:text-5xl">
               {title}
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-300/90 md:text-base">
@@ -121,7 +121,7 @@ export default function StatusHero({ data, status }: { data: WeatherBundle; stat
 
       {/* severity ticker for the first upcoming event */}
       {next && (
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-white/10 bg-black/20 px-8 py-3 text-xs text-slate-300 md:px-10">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-white/10 bg-black/20 px-5 py-3 text-xs text-slate-300 sm:px-8 md:px-10">
           <span className="font-semibold text-white">
             Next event: {next.level === 'storm' ? 'Thunderstorm' : next.level === 'heavy' ? 'Heavy rain' : 'Rain'}
           </span>
@@ -129,7 +129,7 @@ export default function StatusHero({ data, status }: { data: WeatherBundle; stat
             {next.ongoing ? 'Now' : formatHour(next.start, data.timeZone)} →{' '}
             {formatHour(next.end, data.timeZone)} ({next.hours} h)
           </span>
-          <span>Peak probability {next.peakProb}%</span>
+          <span>Peak precipitation probability {next.peakProb}%</span>
           {next.totalMm > 0.1 && <span>~{next.totalMm.toFixed(1)} mm expected</span>}
           {next.maxGusts >= 40 && <span>Gusts up to {Math.round(next.maxGusts)} km/h</span>}
         </div>

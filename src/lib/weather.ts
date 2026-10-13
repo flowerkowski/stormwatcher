@@ -139,10 +139,14 @@ export async function fetchWeather(
     timezone: 'auto',
     timeformat: 'unixtime',
     forecast_days: '7',
+    temperature_unit: 'celsius',
+    wind_speed_unit: 'kmh',
+    precipitation_unit: 'mm',
   })
   const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, { signal })
   if (!res.ok) throw new Error(`Weather request failed (${res.status})`)
   const json = (await res.json()) as ForecastApiResponse
+  validateForecast(json)
 
   const current: CurrentWeather = {
     temp: json.current.temperature_2m,
@@ -155,19 +159,22 @@ export async function fetchWeather(
   }
 
   const now = Date.now()
-  const hours: HourPoint[] = json.hourly.time
+  const hours: HourPoint[] = json.hourly.time.slice(0, -1)
     .map((t, i) => {
       const time = new Date(t * 1000)
       const code = json.hourly.weather_code[i]
-      const prob = json.hourly.precipitation_probability?.[i] ?? 0
-      const mm = json.hourly.precipitation?.[i] ?? 0
+      // Open-Meteo amounts/probabilities/gusts describe the PRECEDING hour.
+      // Pair the next valid timestamp with this bucket's start and instant code.
+      const prob = json.hourly.precipitation_probability[i + 1]
+      const mm = json.hourly.precipitation[i + 1]
       return {
         time,
+        precipitationTime: new Date(json.hourly.time[i + 1] * 1000),
         temp: json.hourly.temperature_2m[i],
         precipProb: prob,
         precipMm: mm,
         code,
-        gusts: json.hourly.wind_gusts_10m?.[i] ?? 0,
+        gusts: json.hourly.wind_gusts_10m[i + 1],
         level: classifyHour(code, prob, mm, settings),
       }
     })
@@ -198,7 +205,7 @@ export async function fetchWeather(
 
 /* ---------------- Alert engine ---------------- */
 
-function classifyHour(
+export function classifyHour(
   code: number,
   prob: number,
   mm: number,
@@ -234,6 +241,7 @@ export function buildEvents(hours: HourPoint[]): AlertEvent[] {
       continue
     }
     const t = h.time.getTime()
+    if (cur && t !== cur.end.getTime()) flush()
     if (!cur) {
       cur = {
         id: `${h.level}-${h.time.toISOString()}`,
@@ -259,6 +267,7 @@ export function buildEvents(hours: HourPoint[]): AlertEvent[] {
     }
   }
   flush()
+  for (const event of events) event.id = `${event.level}-${event.start.toISOString()}`
   // The current-hour bucket is retained so ongoing events are detected, but an
   // event that has already ended must never be presented as an active alert.
   return events.filter((event) => event.end.getTime() > now)
@@ -268,6 +277,37 @@ export function overallStatus(events: AlertEvent[]): SkyStatus {
   if (events.some((e) => e.level === 'storm')) return 'storm'
   if (events.length > 0) return 'rain'
   return 'clear'
+}
+
+/** Refuse incomplete forecasts rather than reporting missing values as dry weather. */
+export function validateForecast(data: ForecastApiResponse): void {
+  const fail = () => { throw new Error('The weather provider returned incomplete forecast data') }
+  if (!data || typeof data.timezone !== 'string' || !data.current || !data.hourly || !data.daily) fail()
+  try { new Intl.DateTimeFormat('en', { timeZone: data.timezone }) } catch { fail() }
+  const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+  const currentFields = ['time', 'temperature_2m', 'relative_humidity_2m', 'apparent_temperature', 'weather_code', 'wind_speed_10m', 'wind_gusts_10m'] as const
+  if (!currentFields.every((key) => finite(data.current[key]))) fail()
+  const expected = [
+    [data.hourly, ['time', 'temperature_2m', 'precipitation_probability', 'precipitation', 'weather_code', 'wind_gusts_10m']],
+    [data.daily, ['time', 'weather_code', 'temperature_2m_max', 'temperature_2m_min', 'precipitation_probability_max', 'precipitation_sum']],
+  ] as const
+  for (const [group, fields] of expected) {
+    for (const field of fields) if (!Array.isArray((group as unknown as Record<string, unknown>)[field])) fail()
+  }
+  for (const group of [data.hourly, data.daily]) {
+    if (!Array.isArray(group.time) || !group.time.length) fail()
+    for (const values of Object.values(group)) {
+      if (!Array.isArray(values) || values.length !== group.time.length || !values.every(finite)) fail()
+    }
+    if (group.time.some((t, i) => t <= 0 || (i > 0 && t <= group.time[i - 1]))) fail()
+  }
+  for (const probabilities of [data.hourly.precipitation_probability, data.daily.precipitation_probability_max]) {
+    if (probabilities.some((v) => v < 0 || v > 100)) fail()
+  }
+  if (data.hourly.precipitation.some((v) => v < 0) || data.daily.precipitation_sum.some((v) => v < 0)) fail()
+  const now = Date.now() / 1000
+  if (!data.hourly.time.some((t) => t > now && t < now + 7200)) fail()
+  if (data.hourly.time.some((t, i) => i > 0 && t - data.hourly.time[i - 1] !== 3600)) fail()
 }
 
 /** Stable signature used to detect *new* alerts between polls. */
@@ -306,7 +346,12 @@ const SIG_KEY = 'stormwatch.signature'
 export function loadLocation(): SavedLocation | null {
   try {
     const raw = localStorage.getItem(LOC_KEY)
-    return raw ? (JSON.parse(raw) as SavedLocation) : null
+    if (!raw) return null
+    const loc = JSON.parse(raw) as SavedLocation
+    return loc && typeof loc.name === 'string' && loc.name.length > 0
+      && typeof loc.latitude === 'number' && Number.isFinite(loc.latitude) && Math.abs(loc.latitude) <= 90
+      && typeof loc.longitude === 'number' && Number.isFinite(loc.longitude) && Math.abs(loc.longitude) <= 180
+      && (loc.country === undefined || typeof loc.country === 'string') ? loc : null
   } catch {
     return null
   }
@@ -321,10 +366,23 @@ export function saveLocation(loc: SavedLocation | null) {
   }
 }
 
-export function loadSettings<T>(defaults: T): T {
+export function loadSettings(defaults: AlertSettings): AlertSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
-    return raw ? { ...defaults, ...(JSON.parse(raw) as T) } : defaults
+    if (!raw) return defaults
+    const saved = JSON.parse(raw) as Record<string, unknown>
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return defaults
+    const settings = { ...defaults }
+    for (const key of ['stormAlerts', 'rainAlerts', 'notifyEnabled', 'soundEnabled'] as const) {
+      if (typeof saved[key] === 'boolean') settings[key] = saved[key]
+    }
+    const ranges = { rainThreshold: [20, 90], heavyMmPerHour: [1, 15], refreshMinutes: [5, 60], leadMinutes: [0, 2880] } as const
+    for (const key of Object.keys(ranges) as Array<keyof typeof ranges>) {
+      const value = saved[key]
+      const [min, max] = ranges[key]
+      if (typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max) settings[key] = value
+    }
+    return settings
   } catch {
     return defaults
   }

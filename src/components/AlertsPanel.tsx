@@ -46,9 +46,9 @@ export default function AlertsPanel({
           {events.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-10 text-center">
               <CloudSun className="h-10 w-10 text-emerald-300/70" strokeWidth={1.4} />
-              <p className="text-sm font-medium text-slate-200">Nothing on the radar</p>
+              <p className="text-sm font-medium text-slate-200">No enabled forecast alerts</p>
               <p className="max-w-52 text-xs leading-relaxed text-slate-400">
-                No rain or storms expected in the next 48 hours. We'll keep watching.
+                No events match your enabled alert types and thresholds. We'll keep watching.
               </p>
             </div>
           )}

@@ -13,12 +13,15 @@ StormWatch is a focused rain and thunderstorm dashboard for the next few hours a
 - Location-specific settings and alert history stored in browser storage
 - Responsive layout with reduced-motion support
 - No API key, server, or account required
+- Optional WeatherNext 3 ensemble comparison through a credentialed backend
 
 StormWatch is a convenience forecast tool, not an official emergency-warning service. Follow your local weather authority for safety-critical alerts.
 
 ## Try it locally
 
-Requirements: Node.js 20.19 or newer. Node 22 is used by the deployment workflow.
+Requirements: Node.js 22.18 or newer, plus Python 3 for the backend tests in
+`npm run check`. Node 22 is used by the deployment workflow. The optional Google
+backend also needs the Python dependencies listed in `backend/requirements.txt`.
 
 ```bash
 git clone https://github.com/flowerkowski/stormwatcher.git
@@ -63,6 +66,13 @@ These services are useful when you want automatic preview deployments for pull r
 - GPS is requested only after you choose **Use GPS**. A best-effort reverse lookup through [BigDataCloud](https://www.bigdatacloud.net/) gives the coordinates a friendly place name.
 - The selected location, alert settings, and alert signatures stay in your browser's local storage.
 - Forecast monitoring and alerts run only while the page is open. Background push notifications would require a service worker and a notification backend.
+
+## WeatherNext 3
+
+The optional comparison shows Google ensemble mean rainfall, p10–p90 spread,
+temperature and wind beside matching Open-Meteo hours. Google requires approved
+data access and a backend; the static app works without these. See
+[setup, data semantics and verification limits](docs/WEATHERNEXT.md).
 
 ## Contributing
 
