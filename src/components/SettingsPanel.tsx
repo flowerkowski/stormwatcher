@@ -1,4 +1,4 @@
-import { Bell, BellRing, Volume2 } from 'lucide-react'
+import { Bell, BellRing, Clock, RotateCcw, Volume2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
@@ -12,6 +12,7 @@ import {
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import type { AlertSettings } from '@/types/weather'
+import { DEFAULT_SETTINGS } from '@/types/weather'
 import { playTestSound } from '@/lib/sound'
 
 interface Props {
@@ -22,6 +23,13 @@ interface Props {
 }
 
 const REFRESH_OPTIONS = [5, 10, 15, 30, 60]
+const LEAD_OPTIONS = [
+  { minutes: 180, label: '3h' },
+  { minutes: 360, label: '6h' },
+  { minutes: 720, label: '12h' },
+  { minutes: 1440, label: '24h' },
+  { minutes: 2880, label: '48h' },
+]
 
 export default function SettingsPanel({ open, onOpenChange, settings, onChange }: Props) {
   const set = <K extends keyof AlertSettings>(key: K, value: AlertSettings[K]) =>
@@ -42,15 +50,15 @@ export default function SettingsPanel({ open, onOpenChange, settings, onChange }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full border-white/10 bg-slate-950/95 text-white backdrop-blur-2xl sm:max-w-md">
+      <SheetContent className="w-full overflow-y-auto border-white/10 bg-slate-950/95 text-white backdrop-blur-2xl sm:max-w-md">
         <SheetHeader>
-          <SheetTitle className="text-white">Alert settings</SheetTitle>
+          <SheetTitle className="font-display text-white">Alert &amp; telemetry settings</SheetTitle>
           <SheetDescription className="text-slate-400">
-            Tune when and how StormWatch warns you.
+            Tune detection thresholds, lead-time windows, and alert delivery.
           </SheetDescription>
         </SheetHeader>
 
-        <div className="mt-8 space-y-7 px-4 pb-6">
+        <div className="mt-6 space-y-6 px-4 pb-6">
           {/* thresholds */}
           <div className="space-y-5">
             <div>
@@ -58,7 +66,7 @@ export default function SettingsPanel({ open, onOpenChange, settings, onChange }
                 <Label className="text-slate-200" htmlFor="rain-threshold">
                   Rain alert threshold
                 </Label>
-                <span className="text-sm font-semibold text-sky-300 tabular-nums">
+                <span className="font-mono rounded border border-sky-400/30 bg-sky-500/15 px-2 py-0.5 text-xs font-semibold text-sky-300 tabular-nums">
                   ≥ {settings.rainThreshold}%
                 </span>
               </div>
@@ -82,7 +90,7 @@ export default function SettingsPanel({ open, onOpenChange, settings, onChange }
                 <Label className="text-slate-200" htmlFor="heavy-rain-threshold">
                   Heavy rain amount
                 </Label>
-                <span className="text-sm font-semibold text-amber-300 tabular-nums">
+                <span className="font-mono rounded border border-amber-400/30 bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-300 tabular-nums">
                   ≥ {settings.heavyMmPerHour} mm/h
                 </span>
               </div>
@@ -132,6 +140,36 @@ export default function SettingsPanel({ open, onOpenChange, settings, onChange }
                 onCheckedChange={(v) => set('rainAlerts', v)}
               />
             </div>
+          </div>
+
+          <Separator className="bg-white/10" />
+
+          {/* lead time window */}
+          <div>
+            <Label className="flex items-center gap-1.5 text-slate-200">
+              <Clock className="h-3.5 w-3.5 text-sky-300" />
+              Alert lead-time window
+            </Label>
+            <div className="mt-2.5 flex gap-1.5">
+              {LEAD_OPTIONS.map((opt) => (
+                <button
+                  key={opt.minutes}
+                  type="button"
+                  aria-pressed={settings.leadMinutes === opt.minutes}
+                  onClick={() => set('leadMinutes', opt.minutes)}
+                  className={`font-mono flex-1 rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
+                    settings.leadMinutes === opt.minutes
+                      ? 'border-sky-400/60 bg-sky-500/20 text-sky-200'
+                      : 'border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-xs text-slate-500">
+              Only fire sound &amp; browser notifications for events starting within this window.
+            </p>
           </div>
 
           <Separator className="bg-white/10" />
@@ -198,14 +236,14 @@ export default function SettingsPanel({ open, onOpenChange, settings, onChange }
           {/* refresh */}
           <div>
             <Label className="text-slate-200">Check for updates every</Label>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-2.5 flex gap-1.5">
               {REFRESH_OPTIONS.map((m) => (
                 <button
                   key={m}
                   type="button"
                   aria-pressed={settings.refreshMinutes === m}
                   onClick={() => set('refreshMinutes', m)}
-                  className={`flex-1 rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
+                  className={`font-mono flex-1 rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
                     settings.refreshMinutes === m
                       ? 'border-sky-400/60 bg-sky-500/20 text-sky-200'
                       : 'border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/10'
@@ -218,6 +256,19 @@ export default function SettingsPanel({ open, onOpenChange, settings, onChange }
             <p className="mt-2 text-xs leading-relaxed text-slate-500">
               Keep this tab open — monitoring and alerts run while the page is open.
             </p>
+          </div>
+
+          <div className="pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onChange(DEFAULT_SETTINGS)}
+              className="w-full border border-white/10 bg-white/[0.03] text-xs text-slate-400 hover:bg-white/[0.08] hover:text-white"
+            >
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+              Reset alert settings to defaults
+            </Button>
           </div>
         </div>
       </SheetContent>

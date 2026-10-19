@@ -337,21 +337,150 @@ export function formatDay(d: Date, timeZone?: string): string {
   return d.toLocaleDateString([], { weekday: 'short', timeZone })
 }
 
+export function formatCoords(lat: number, lon: number): string {
+  const ns = lat >= 0 ? 'N' : 'S'
+  const ew = lon >= 0 ? 'E' : 'W'
+  return `${Math.abs(lat).toFixed(2)}°${ns} ${Math.abs(lon).toFixed(2)}°${ew}`
+}
+
+export interface DryWindowInfo {
+  currentlyDry: boolean
+  /** Hours in the current dry window (if currentlyDry) or the next upcoming dry window */
+  durationHours: number
+  /** Start of the dry window */
+  start: Date
+  /** End of the dry window (or end of forecast horizon if all clear) */
+  end: Date
+  /** True when the entire remaining forecast horizon is dry */
+  allClear: boolean
+}
+
+export function computeDryWindow(hours: HourPoint[]): DryWindowInfo | null {
+  if (!hours.length) return null
+  const isDry = (h: HourPoint) => h.level === null && h.precipMm < 0.2
+  const firstDry = isDry(hours[0])
+
+  if (firstDry) {
+    let endIdx = 0
+    while (endIdx < hours.length && isDry(hours[endIdx])) {
+      endIdx++
+    }
+    const lastBucket = hours[endIdx - 1]
+    return {
+      currentlyDry: true,
+      durationHours: endIdx,
+      start: hours[0].time,
+      end: new Date(lastBucket.time.getTime() + 3600_000),
+      allClear: endIdx === hours.length,
+    }
+  }
+
+  // Currently wet/stormy: find the next dry stretch (prefer >= 2h if one exists within 24h, else first >= 1h)
+  const windows: Array<{ startIdx: number; count: number }> = []
+  let idx = 0
+  while (idx < hours.length) {
+    if (isDry(hours[idx])) {
+      const startIdx = idx
+      while (idx < hours.length && isDry(hours[idx])) idx++
+      windows.push({ startIdx, count: idx - startIdx })
+    } else {
+      idx++
+    }
+  }
+
+  if (!windows.length) return null
+  const chosen = windows.find((w) => w.count >= 2 && w.startIdx <= 24) ?? windows[0]
+  const startBucket = hours[chosen.startIdx]
+  const endBucket = hours[chosen.startIdx + chosen.count - 1]
+  return {
+    currentlyDry: false,
+    durationHours: chosen.count,
+    start: startBucket.time,
+    end: new Date(endBucket.time.getTime() + 3600_000),
+    allClear: chosen.startIdx + chosen.count === hours.length,
+  }
+}
+
+export interface Next24hSummary {
+  totalMm: number
+  maxGusts: number
+  minTemp: number
+  maxTemp: number
+  wetHours: number
+  stormHours: number
+  peakProb: number
+}
+
+export function computeNext24hSummary(hours: HourPoint[]): Next24hSummary {
+  const slice = hours.slice(0, 24)
+  if (!slice.length) {
+    return { totalMm: 0, maxGusts: 0, minTemp: 0, maxTemp: 0, wetHours: 0, stormHours: 0, peakProb: 0 }
+  }
+  let totalMm = 0
+  let maxGusts = 0
+  let minTemp = Infinity
+  let maxTemp = -Infinity
+  let wetHours = 0
+  let stormHours = 0
+  let peakProb = 0
+
+  for (const h of slice) {
+    totalMm += h.precipMm
+    if (h.gusts > maxGusts) maxGusts = h.gusts
+    if (h.temp < minTemp) minTemp = h.temp
+    if (h.temp > maxTemp) maxTemp = h.temp
+    if (h.precipProb > peakProb) peakProb = h.precipProb
+    if (h.level !== null || h.precipMm >= 0.2) wetHours++
+    if (h.level === 'storm') stormHours++
+  }
+
+  return {
+    totalMm,
+    maxGusts,
+    minTemp,
+    maxTemp,
+    wetHours,
+    stormHours,
+    peakProb,
+  }
+}
+
 /* ---------------- Persistence ---------------- */
 
 const LOC_KEY = 'stormwatch.location'
+const SAVED_LOCS_KEY = 'stormwatch.savedLocations'
 const SETTINGS_KEY = 'stormwatch.settings'
 const SIG_KEY = 'stormwatch.signature'
+
+function isValidSavedLocation(loc: unknown): loc is SavedLocation {
+  if (!loc || typeof loc !== 'object') return false
+  const l = loc as SavedLocation
+  return (
+    typeof l.name === 'string' &&
+    l.name.length > 0 &&
+    typeof l.latitude === 'number' &&
+    Number.isFinite(l.latitude) &&
+    Math.abs(l.latitude) <= 90 &&
+    typeof l.longitude === 'number' &&
+    Number.isFinite(l.longitude) &&
+    Math.abs(l.longitude) <= 180 &&
+    (l.country === undefined || typeof l.country === 'string')
+  )
+}
+
+export function isSameLocation(a: SavedLocation, b: SavedLocation): boolean {
+  return (
+    Math.abs(a.latitude - b.latitude) < 0.01 &&
+    Math.abs(a.longitude - b.longitude) < 0.01
+  )
+}
 
 export function loadLocation(): SavedLocation | null {
   try {
     const raw = localStorage.getItem(LOC_KEY)
     if (!raw) return null
-    const loc = JSON.parse(raw) as SavedLocation
-    return loc && typeof loc.name === 'string' && loc.name.length > 0
-      && typeof loc.latitude === 'number' && Number.isFinite(loc.latitude) && Math.abs(loc.latitude) <= 90
-      && typeof loc.longitude === 'number' && Number.isFinite(loc.longitude) && Math.abs(loc.longitude) <= 180
-      && (loc.country === undefined || typeof loc.country === 'string') ? loc : null
+    const loc = JSON.parse(raw) as unknown
+    return isValidSavedLocation(loc) ? loc : null
   } catch {
     return null
   }
@@ -364,6 +493,34 @@ export function saveLocation(loc: SavedLocation | null) {
   } catch {
     // Storage can be unavailable in strict privacy modes; the in-memory app still works.
   }
+}
+
+export function loadSavedLocations(): SavedLocation[] {
+  try {
+    const raw = localStorage.getItem(SAVED_LOCS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(isValidSavedLocation).slice(0, 6)
+  } catch {
+    return []
+  }
+}
+
+export function saveSavedLocations(locs: SavedLocation[]) {
+  try {
+    localStorage.setItem(SAVED_LOCS_KEY, JSON.stringify(locs.slice(0, 6)))
+  } catch {
+    // Non-critical persistence failure.
+  }
+}
+
+export function toggleSavedLocation(list: SavedLocation[], loc: SavedLocation): SavedLocation[] {
+  const exists = list.some((item) => isSameLocation(item, loc))
+  if (exists) {
+    return list.filter((item) => !isSameLocation(item, loc))
+  }
+  return [loc, ...list].slice(0, 6)
 }
 
 export function loadSettings(defaults: AlertSettings): AlertSettings {

@@ -108,23 +108,48 @@ export default function WeatherBackground({ status }: { status: SkyStatus }) {
 
   const gradient =
     status === 'storm'
-      ? 'from-[#0b0620] via-[#1e1145] to-[#3b0f3f]'
+      ? 'from-[#070414] via-[#130b2e] to-[#230b2c]'
       : status === 'rain'
-        ? 'from-[#020617] via-[#0b2137] to-[#0f2f4a]'
-        : 'from-[#020617] via-[#0a1a2f] to-[#0b2440]'
+        ? 'from-[#020617] via-[#07192d] to-[#0a233b]'
+        : 'from-[#020617] via-[#061224] to-[#081b33]'
+
+  const ringStroke =
+    status === 'storm'
+      ? 'rgba(167, 139, 250, 0.08)'
+      : status === 'rain'
+        ? 'rgba(56, 189, 248, 0.07)'
+        : 'rgba(52, 211, 153, 0.06)'
 
   return (
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div className={`absolute inset-0 bg-gradient-to-b ${gradient} transition-colors duration-1000`} />
-      {/* soft aurora blobs */}
-      <div className="absolute -top-40 left-1/4 h-[34rem] w-[34rem] rounded-full bg-sky-500/10 blur-3xl" />
+      {/* Subtle meteorological coordinate grid */}
+      <div className="telemetry-grid absolute inset-0 [mask-image:radial-gradient(ellipse_80%_70%_at_50%_25%,#000_40%,transparent_100%)]" />
+      {/* Atmospheric radar range rings */}
+      <svg
+        aria-hidden="true"
+        className="absolute -top-64 left-1/2 h-[52rem] w-[52rem] -translate-x-1/2 opacity-80"
+        viewBox="0 0 800 800"
+        fill="none"
+      >
+        <circle cx="400" cy="400" r="160" stroke={ringStroke} strokeWidth="1" strokeDasharray="4 6" />
+        <circle cx="400" cy="400" r="270" stroke={ringStroke} strokeWidth="1" />
+        <circle cx="400" cy="400" r="380" stroke={ringStroke} strokeWidth="1" strokeDasharray="2 8" />
+        <line x1="400" y1="0" x2="400" y2="800" stroke={ringStroke} strokeWidth="1" />
+        <line x1="0" y1="400" x2="800" y2="400" stroke={ringStroke} strokeWidth="1" />
+      </svg>
+      {/* Horizon glow */}
       <div
-        className={`absolute top-1/3 -right-32 h-[30rem] w-[30rem] rounded-full blur-3xl transition-colors duration-1000 ${
-          status === 'storm' ? 'bg-violet-600/15' : 'bg-cyan-500/10'
+        className={`absolute -top-36 left-1/2 h-96 w-[48rem] -translate-x-1/2 rounded-full blur-3xl transition-colors duration-1000 ${
+          status === 'storm'
+            ? 'bg-violet-500/15'
+            : status === 'rain'
+              ? 'bg-sky-500/12'
+              : 'bg-emerald-500/8'
         }`}
       />
       <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0" />
-      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-slate-950/40" />
+      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-transparent to-slate-950/35" />
     </div>
   )
 }

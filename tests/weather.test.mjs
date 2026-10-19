@@ -1,11 +1,26 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildEvents, classifyHour, validateForecast, overallStatus, alertSignature, fetchWeather, loadLocation, loadSettings } from '../src/lib/weather.ts'
+import {
+  buildEvents,
+  classifyHour,
+  validateForecast,
+  overallStatus,
+  alertSignature,
+  fetchWeather,
+  loadLocation,
+  loadSettings,
+  computeDryWindow,
+  computeNext24hSummary,
+  formatCoords,
+  loadSavedLocations,
+  toggleSavedLocation,
+} from '../src/lib/weather.ts'
 import { DEFAULT_SETTINGS } from '../src/types/weather.ts'
 import { parseWeatherNext } from '../src/lib/weathernext.ts'
 
 const base = Math.floor(Date.now() / 3600000) * 3600000
 const hour = (offset, level = 'rain') => ({ time: new Date(base + offset * 3600000), temp: 10, precipProb: 70, precipMm: 2, code: 61, gusts: 20, level })
+const dryHour = (offset, temp = 14, gusts = 12) => ({ time: new Date(base + offset * 3600000), temp, precipProb: 10, precipMm: 0, code: 1, gusts, level: null })
 
 test('events separate at missing hourly steps and use the final severity in their ID', () => {
   const events = buildEvents([hour(0), hour(1, 'storm'), hour(3)])
@@ -31,6 +46,27 @@ test('classification preserves storm priority and threshold boundaries', () => {
   assert.equal(classifyHour(0, 49, 0, DEFAULT_SETTINGS), null)
   assert.equal(overallStatus(buildEvents([hour(1, 'storm')])), 'storm')
   assert.equal(alertSignature(buildEvents([hour(14)]), 720), '')
+})
+
+test('dry window and 24h summary compute actionable sky windows and totals', () => {
+  const activeDry = computeDryWindow([dryHour(0), dryHour(1), dryHour(2), hour(3)])
+  assert.equal(activeDry.currentlyDry, true)
+  assert.equal(activeDry.durationHours, 3)
+  assert.equal(activeDry.allClear, false)
+
+  const upcomingDry = computeDryWindow([hour(0), hour(1), dryHour(2), dryHour(3), dryHour(4), hour(5)])
+  assert.equal(upcomingDry.currentlyDry, false)
+  assert.equal(upcomingDry.durationHours, 3)
+  assert.equal(upcomingDry.start.getTime(), base + 2 * 3600000)
+
+  const summary = computeNext24hSummary([dryHour(0, 8, 15), hour(1, 'storm'), dryHour(2, 19, 35)])
+  assert.equal(summary.totalMm, 2)
+  assert.equal(summary.maxGusts, 35)
+  assert.equal(summary.minTemp, 8)
+  assert.equal(summary.maxTemp, 19)
+  assert.equal(summary.wetHours, 1)
+  assert.equal(summary.stormHours, 1)
+  assert.equal(formatCoords(52.2297, -0.1278), '52.23°N 0.13°W')
 })
 
 function forecastFixture() {
@@ -104,6 +140,14 @@ test('invalid saved settings and coordinates cannot break forecast polling', (t)
   t.after(() => { if (previous) Object.defineProperty(globalThis, 'localStorage', previous); else delete globalThis.localStorage })
   store.set('stormwatch.location', JSON.stringify({ name: 'Bad', latitude: 900, longitude: 0 }))
   assert.equal(loadLocation(), null)
+  store.set('stormwatch.savedLocations', JSON.stringify([
+    { name: 'Warsaw', latitude: 52.23, longitude: 21.01 },
+    { name: 'Invalid', latitude: 500, longitude: 0 },
+  ]))
+  const pinned = loadSavedLocations()
+  assert.equal(pinned.length, 1)
+  assert.equal(pinned[0].name, 'Warsaw')
+  assert.equal(toggleSavedLocation(pinned, { name: 'Warsaw', latitude: 52.23, longitude: 21.01 }).length, 0)
   store.set('stormwatch.settings', JSON.stringify({ rainThreshold: null, refreshMinutes: -10, soundEnabled: 'false', rainAlerts: false }))
   const settings = loadSettings(DEFAULT_SETTINGS)
   assert.equal(settings.refreshMinutes, 15)
