@@ -25,21 +25,16 @@ rain or thunderstorm probabilities.
 
 ## Verification scope
 
-`npm run check` runs seven JavaScript/TypeScript tests, ten Python tests including
-a local HTTP contract test, ESLint and the production build. Google SDK 3.46.1
-was installed separately to verify query-configuration compatibility. Chromium
+`npm run check` runs JavaScript/TypeScript tests, Python tests including
+a local HTTP contract test, ESLint and the production build. Earth Engine SDK
+(`earthengine-api`) is installed in `.venv` for the WeatherNext backend. Chromium
 smoke checks used forecast fixtures for repeatable desktop/mobile, disabled alert,
 WeatherNext success/failure and keyboard-selection behavior. A real Open-Meteo
 Warsaw forecast was fetched and passed the same response validator.
 
-The user has no approved WeatherNext access yet. No real Google forecast query,
-data permissions, query cost, or hosted deployment has been verified. Google
-access approval and a linked BigQuery dataset are the remaining prerequisites to
-activate and verify that live comparison.
-
 The integration also includes `python -m backend.verify_weathernext`: a default
-dry run validates the exact production query and estimates scanned bytes, while
-an explicit `--execute` validates real rows and writes an inspectable JSON report.
-The browser and backend enforce the full 48-hour contract, UTC hour alignment and
-recent initialization/fetch timestamps. These checks prevent a partial or stale
-comparison from appearing as a complete WeatherNext forecast.
+dry run validates Earth Engine access and checks for a recent 48-hour model run,
+while an explicit `--execute` validates real rows and writes an inspectable JSON
+report. The browser and backend enforce the full 48-hour contract, UTC hour
+alignment and recent initialization/fetch timestamps. These checks prevent a
+partial or stale comparison from appearing as a complete WeatherNext forecast.
